@@ -1,0 +1,170 @@
+<!doctype html>
+<meta charset="utf8">
+<link rel="stylesheet" href="./spec.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/8.4/styles/github.min.css">
+<script src="./spec.js"></script>
+<pre class="metadata">
+title: Error option `framesAbove`
+stage: 1
+contributors: Ruben Bridgewater
+</pre>
+
+<emu-intro id="sec-intro">
+  <h1>Introduction</h1>
+  <p>
+    This proposal introduces a new option, <code>framesAbove</code>, recognized by ECMAScript
+    <code>Error</code> constructors (and their built-in subclasses) that accept an options argument.
+    The option allows authors to omit leading frames, including the topmost invocation of a specified function,
+    from an error's captured stack trace. Frames omitted due to <code>framesAbove</code> do not count
+    towards any stack trace limit that the implementation might apply.
+  </p>
+  <emu-note>
+    <p>
+      Many hosts historically provided similar functionality (for example, the <code>constructorOpt</code>
+      parameter to <code>Error.captureStackTrace</code> in some environments). This proposal standardizes
+      a language-level option with interoperable semantics.
+    </p>
+  </emu-note>
+</emu-intro>
+
+<emu-clause id="sec-internal-slots">
+  <h1>Internal Slots</h1>
+  <p>
+    Each <code>Error</code> instance is extended with the following internal slot in addition to those already present:
+  </p>
+  <ul>
+    <li>
+      <dfn>[[FramesAboveFunction]]</dfn> (default value: <emu-val>undefined</emu-val>) —
+      either <emu-val>undefined</emu-val> or a callable object. When a stack trace is captured for the error, if this slot
+      is callable, the frames above (and including) the topmost invocation of that function are omitted.
+    </li>
+  </ul>
+</emu-clause>
+
+<emu-clause id="sec-installframesabove" aoid="InstallFramesAbove">
+  <h1>InstallFramesAbove ( <var>E</var>, <var>options</var> )</h1>
+  <p>
+    The abstract operation InstallFramesAbove performs validation of the <code>framesAbove</code> option
+    and records it on the <code>Error</code> instance.
+  </p>
+  <emu-alg>
+    1. If <var>options</var> is <emu-val>undefined</emu-val>, return.
+    2. Let <var>framesAbove</var> be the value of <var>options</var>'s <code>"framesAbove"</code> property if it exists; otherwise <emu-val>undefined</emu-val>.
+    3. If <var>framesAbove</var> is <emu-val>undefined</emu-val>, return.
+    4. If <var>framesAbove</var> is not callable, throw a TypeError exception.
+    5. Set <var>E</var>.[[FramesAboveFunction]] to <var>framesAbove</var>.
+    6. Return.
+  </emu-alg>
+  <emu-note>
+    <p>
+      The option is stored only on the specific error instance and has no global effect.
+    </p>
+  </emu-note>
+</emu-clause>
+
+<emu-clause id="sec-filterframesabove" aoid="FilterFramesAbove">
+  <h1>FilterFramesAbove ( <var>S</var>, <var>F</var> )</h1>
+  <p>
+    The abstract operation FilterFramesAbove filters a sequence of frames to remove those at or above the topmost
+    call to function <var>F</var>. Frame sequences are host-defined; this operation is applied immediately prior
+    to the application of any stack length limit and formatting.
+  </p>
+  <emu-alg>
+    1. If <var>F</var> is <emu-val>undefined</emu-val>, return <var>S</var>.
+    2. For each integer <var>k</var> starting at 0 and increasing by 1, while <var>k</var> &lt; the length of <var>S</var>:
+      1. Let <var>frame</var> be <var>S</var>[<var>k</var>].
+      2. Let <var>G</var> be the function object, if any, associated with <var>frame</var> as defined by the host.
+      3. If <var>G</var> is the same function object as <var>F</var>, then
+        1. Return a new sequence containing the elements of <var>S</var> from index <var>k</var> + 1 (inclusive) to the end, in order.
+    3. Return <var>S</var>.
+  </emu-alg>
+  <emu-note>
+    <p>
+      The "associated function" for a frame is host-defined today; this operation relies on the same association used
+      by the host when producing stack traces.
+    </p>
+  </emu-note>
+</emu-clause>
+
+<emu-clause id="sec-error-constructors-framesabove">
+  <h1>Changes to Error and Error Subclass Constructors</h1>
+  <p>
+    The <code>Error</code> constructor and each of the built-in error subclass constructors that accept an options argument
+    (<code>EvalError</code>, <code>RangeError</code>, <code>ReferenceError</code>, <code>SyntaxError</code>, <code>TypeError</code>, <code>URIError</code>,
+    and <code>AggregateError</code>) are modified to recognize <code>framesAbove</code>.
+  </p>
+
+  <emu-clause id="sec-error-constructor-mod">
+    <h1>The Error Constructor</h1>
+    <p>
+      The built-in function <code>Error ( message [ , options ] )</code> is modified as follows:
+    </p>
+    <emu-alg>
+      1. Perform the steps as currently specified to create the <code>Error</code> instance <var>E</var>.
+      2. If <var>options</var> is not present, <emu-xref href="#sec-installframesabove">InstallFramesAbove</emu-xref> has no effect.
+      3. Otherwise, perform InstallFramesAbove(<var>E</var>, <var>options</var>).
+      4. Return <var>E</var>.
+    </emu-alg>
+  </emu-clause>
+
+  <emu-clause id="sec-error-subclass-constructors-mod">
+    <h1>Built-in Error Subclass Constructors</h1>
+    <p>
+      For each of the built-in error subclass constructors that accept <var>options</var>:
+    </p>
+    <ul>
+      <li><code>EvalError ( message [ , options ] )</code></li>
+      <li><code>RangeError ( message [ , options ] )</code></li>
+      <li><code>ReferenceError ( message [ , options ] )</code></li>
+      <li><code>SyntaxError ( message [ , options ] )</code></li>
+      <li><code>TypeError ( message [ , options ] )</code></li>
+      <li><code>URIError ( message [ , options ] )</code></li>
+    </ul>
+    <p>
+      Insert, after the error instance is created and any other options are processed (such as <code>cause</code>), the step:
+      “Perform InstallFramesAbove(<var>E</var>, <var>options</var>).”
+    </p>
+    <p>
+      For <code>AggregateError ( errors, message [ , options ] )</code>, insert the same step after the error instance is created and prior options (such as <code>cause</code>) are processed, using its <var>options</var> parameter.
+    </p>
+  </emu-clause>
+</emu-clause>
+
+<emu-clause id="sec-host-stack-filtering-framesabove">
+  <h1>Host Requirements for Stack Trace Filtering</h1>
+  <p>
+    This section applies to hosts that provide a mechanism to capture and expose error stack traces (for example, via
+    a non-standard <code>stack</code> property or other diagnostics). Such hosts <em>must</em> integrate
+    <code>framesAbove</code> as follows:
+  </p>
+  <emu-alg>
+    1. When capturing the stack for an <code>Error</code> instance <var>E</var>, let <var>S</var> be the sequence of frames that would otherwise be captured for <var>E</var>.
+    2. Let <var>F</var> be <var>E</var>.[[FramesAboveFunction]].
+    3. Set <var>S</var> to FilterFramesAbove(<var>S</var>, <var>F</var>).
+    4. Apply any host-defined stack trace length limit to <var>S</var>. Frames omitted in step 3 do not count towards that limit.
+    5. Format <var>S</var> as the host would ordinarily format a stack trace.
+  </emu-alg>
+  <emu-note>
+    <p>
+      If <var>F</var> does not appear in the captured stack, the sequence of frames is unchanged by this operation.
+      If <var>F</var> appears multiple times (for example, due to recursion), the topmost occurrence is used for filtering.
+    </p>
+  </emu-note>
+</emu-clause>
+
+<emu-clause id="sec-examples" informative>
+  <h1>Examples</h1>
+  <emu-example>
+    <h1>Removing wrapper frames</h1>
+    <p>The topmost call to <code>wrapper</code> and all frames above it are omitted.</p>
+<pre><code class="javascript">
+function wrapper(fn, ...args) { return fn(...args); }
+function doWork() {
+  throw new Error('boom', { framesAbove: wrapper });
+}
+wrapper(doWork);
+</code></pre>
+  </emu-example>
+</emu-clause>
+
+
